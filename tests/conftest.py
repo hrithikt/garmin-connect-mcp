@@ -1,8 +1,38 @@
 """Pytest configuration and shared fixtures."""
 
+import keyring
+import keyring.backend
 import pytest
 
 from garmin_connect_mcp.types import HeartRateData, SleepData, StepsData, StressData
+
+
+class InMemoryKeyring(keyring.backend.KeyringBackend):
+    """Fake keyring backend for tests — never touches the real OS keychain."""
+
+    priority = 1  # pyright: ignore[reportAssignmentType]
+
+    def __init__(self):
+        super().__init__()
+        self._store: dict[tuple[str, str], str] = {}
+
+    def get_password(self, service, username):
+        return self._store.get((service, username))
+
+    def set_password(self, service, username, password):
+        self._store[(service, username)] = password
+
+    def delete_password(self, service, username):
+        del self._store[(service, username)]
+
+
+@pytest.fixture(autouse=True)
+def fake_keyring():
+    """Swap in an in-memory keyring backend for every test in the suite."""
+    original_backend = keyring.get_keyring()
+    keyring.set_keyring(InMemoryKeyring())
+    yield
+    keyring.set_keyring(original_backend)
 
 
 @pytest.fixture

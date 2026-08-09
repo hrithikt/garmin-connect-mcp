@@ -2,10 +2,15 @@
 
 from pathlib import Path
 
+import keyring
+import keyring.errors
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 DEFAULT_ENV_FILE = Path.home() / ".garminconnect.env"
 LOCAL_ENV_FILE = Path(".env")
+
+KEYCHAIN_SERVICE = "garmin-connect-mcp"
+KEYCHAIN_ACCOUNT = "oauth-tokens"
 
 
 class GarminConfig(BaseSettings):
@@ -34,12 +39,10 @@ def load_config() -> GarminConfig:
 
 
 def validate_credentials(config: GarminConfig) -> bool:
-    """Check if credentials are properly configured."""
-    if not config.garmin_email or config.garmin_email == "your_email@example.com":
-        return False
-    if not config.garmin_password or config.garmin_password == "your_password":
-        return False
-    return True
+    """Check if a stored OAuth token is available for authentication."""
+    # `config` is unused now that credentials live in the keychain; kept so
+    # middleware.py's call site doesn't need to change.
+    return load_tokens() is not None
 
 
 def get_token_store() -> str:
@@ -54,3 +57,16 @@ def get_token_base64_path() -> str:
     """Get the base64 token file path."""
     config = load_config()
     return config.garmintokens_base64
+
+
+def save_tokens(token_json: str) -> None:
+    """Save the OAuth token blob to the OS keychain."""
+    keyring.set_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, token_json)
+
+
+def load_tokens() -> str | None:
+    """Load the OAuth token blob from the OS keychain, or None if absent/unreadable."""
+    try:
+        return keyring.get_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT)
+    except keyring.errors.KeyringError:
+        return None
