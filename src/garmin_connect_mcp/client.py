@@ -2,7 +2,6 @@
 
 import sys
 from collections.abc import Callable
-from pathlib import Path
 from typing import Any
 
 from garminconnect import (
@@ -12,7 +11,7 @@ from garminconnect import (
     GarminConnectTooManyRequestsError,
 )
 
-from .auth import GarminConfig, get_token_base64_path, get_token_store
+from .auth import GarminConfig, load_tokens, save_tokens
 
 
 class GarminAPIError(Exception):
@@ -74,17 +73,14 @@ def init_garmin_client(
         Authenticated Garmin client or None on failure
     """
     try:
-        tokenstore = get_token_store()
+        token_json = load_tokens()
 
         # Try token-based login first
         try:
-            # Check if tokens exist
-            token_path = Path(tokenstore)
-            if token_path.exists() and any(token_path.iterdir()):
-                # Try to login with existing tokens
+            if token_json:
                 garmin = Garmin()
-                garmin.login(tokenstore)
-                print("Logged in using token data from directory.", file=sys.stderr)
+                garmin.login(token_json)
+                print("Logged in using token data from keychain.", file=sys.stderr)
                 return garmin
             else:
                 raise FileNotFoundError("No tokens found")
@@ -109,13 +105,8 @@ def init_garmin_client(
             garmin.login()
 
             # Save tokens for future use
-            garmin.client.dump(tokenstore)
-            print(f"OAuth tokens saved to directory: {tokenstore}", file=sys.stderr)
-
-            # Also save base64 encoded tokens
-            token_base64_path = get_token_base64_path()
-            Path(token_base64_path).write_text(garmin.client.dumps())
-            print(f"OAuth tokens encoded as base64: {token_base64_path}", file=sys.stderr)
+            save_tokens(garmin.client.dumps())
+            print("OAuth tokens saved to keychain.", file=sys.stderr)
 
             return garmin
 
