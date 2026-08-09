@@ -2,9 +2,7 @@
 
 import sys
 
-from dotenv import set_key
-
-from ..auth import GarminConfig, get_env_file_path, get_token_store
+from ..auth import KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, GarminConfig
 from ..client import init_garmin_client
 
 
@@ -27,16 +25,6 @@ def main():
         print("\nError: Email and password are required.")
         return
 
-    # Save to an existing local .env file, or the default user config file.
-    env_path = get_env_file_path()
-    env_path.parent.mkdir(parents=True, exist_ok=True)
-    env_path.touch(exist_ok=True)
-
-    set_key(str(env_path), "GARMIN_EMAIL", email)
-    set_key(str(env_path), "GARMIN_PASSWORD", password)
-
-    print()
-    print(f"Credentials saved to: {env_path}")
     print()
     print("-" * 60)
     print("Authenticating with Garmin Connect...")
@@ -63,7 +51,10 @@ def main():
     print("=" * 60)
     print()
     print("Authentication successful.")
-    print(f"Tokens saved to: {get_token_store()}")
+    print(
+        f"Tokens saved to macOS Keychain "
+        f"(service: {KEYCHAIN_SERVICE!r}, account: {KEYCHAIN_ACCOUNT!r})."
+    )
     print()
     print("You can now use the Garmin Connect MCP server:")
     print("  uvx garmin-connect-mcp")
