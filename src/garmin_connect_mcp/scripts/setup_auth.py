@@ -1,5 +1,6 @@
 """Interactive authentication setup script for Garmin Connect MCP."""
 
+import getpass
 import sys
 
 from ..auth import KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, GarminConfig
@@ -19,7 +20,7 @@ def main():
     print("Enter your Garmin Connect credentials:")
     print("-" * 60)
     email = input("Email: ").strip()
-    password = input("Password: ").strip()
+    password = getpass.getpass("Password: ").strip()
 
     if not email or not password:
         print("\nError: Email and password are required.")
