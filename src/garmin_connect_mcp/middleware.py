@@ -10,7 +10,7 @@ from fastmcp.exceptions import ToolError
 from fastmcp.server.middleware import Middleware, MiddlewareContext
 
 from .auth import load_config, validate_credentials
-from .client import GarminClientWrapper, init_garmin_client
+from .client import GarminClientWrapper, init_garmin_client, persist_refreshed_tokens
 
 
 class ConfigMiddleware(Middleware):
@@ -54,5 +54,9 @@ class ConfigMiddleware(Middleware):
                 serializable=False,
             )
 
-        # Continue to the tool execution
-        return await call_next(context)
+        # The tool's API calls may refresh (and rotate) the tokens, even if the tool fails
+        tokens_before_call = client.client.dumps()
+        try:
+            return await call_next(context)
+        finally:
+            persist_refreshed_tokens(client, tokens_before_call)

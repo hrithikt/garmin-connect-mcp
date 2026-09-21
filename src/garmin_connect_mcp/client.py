@@ -4,6 +4,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
+import keyring.errors
 from garminconnect import (
     Garmin,
     GarminConnectAuthenticationError,
@@ -53,6 +54,26 @@ class GarminAuthenticationError(GarminAPIError):
         )
 
 
+def persist_refreshed_tokens(garmin: Garmin, previous_tokens: str | None) -> None:
+    """
+    Save the client's OAuth tokens to the keychain if garminconnect refreshed them.
+
+    garminconnect rotates both the access and refresh tokens on every refresh, but
+    only writes them back when it logged in from a token file. We log in from the
+    keychain string, so without this the stored refresh token goes stale and the
+    user has to re-run 'garmin-connect-mcp auth'.
+    """
+    current_tokens = garmin.client.dumps()
+    if current_tokens == previous_tokens:
+        return
+    try:
+        save_tokens(current_tokens)
+    except keyring.errors.KeyringError as err:
+        print(f"Could not save refreshed OAuth tokens to keychain: {err}", file=sys.stderr)
+        return
+    print("Refreshed OAuth tokens saved to keychain.", file=sys.stderr)
+
+
 def init_garmin_client(
     config: GarminConfig, prompt_mfa: Callable[[], str] | None = None
 ) -> Garmin | None:
@@ -80,6 +101,7 @@ def init_garmin_client(
             if token_json:
                 garmin = Garmin()
                 garmin.login(token_json)
+                persist_refreshed_tokens(garmin, token_json)
                 print("Logged in using token data from keychain.", file=sys.stderr)
                 return garmin
             else:

@@ -3,7 +3,7 @@
 import pytest
 from fastmcp.exceptions import ToolError
 
-from garmin_connect_mcp.auth import save_tokens
+from garmin_connect_mcp.auth import load_tokens, save_tokens
 from garmin_connect_mcp.middleware import ConfigMiddleware
 
 
@@ -48,3 +48,41 @@ async def test_injects_client_and_calls_next_when_token_valid(mocker):
     assert result == "tool-result"
     call_next.assert_called_once_with(context)
     assert "client" in context.fastmcp_context.state
+
+
+def _garmin_that_refreshes_during_tool_call(mocker):
+    """Stored tokens load unchanged, then the tool's API call rotates them (e.g. after a 401)."""
+    save_tokens("stored-token-blob")
+    mock_garmin_cls = mocker.patch("garmin_connect_mcp.client.Garmin")
+    dumps = mock_garmin_cls.return_value.client.dumps
+    dumps.return_value = "stored-token-blob"
+
+    def refresh_tokens():
+        dumps.return_value = "refreshed-mid-call"
+
+    return refresh_tokens
+
+
+async def test_saves_tokens_refreshed_during_tool_call(mocker):
+    refresh_tokens = _garmin_that_refreshes_during_tool_call(mocker)
+
+    async def call_next(ctx):
+        refresh_tokens()
+        return "tool-result"
+
+    await ConfigMiddleware().on_call_tool(FakeMiddlewareContext(), call_next)
+
+    assert load_tokens() == "refreshed-mid-call"
+
+
+async def test_saves_tokens_refreshed_during_tool_call_that_fails(mocker):
+    refresh_tokens = _garmin_that_refreshes_during_tool_call(mocker)
+
+    async def call_next(ctx):
+        refresh_tokens()
+        raise RuntimeError("tool failed after refresh")
+
+    with pytest.raises(RuntimeError):
+        await ConfigMiddleware().on_call_tool(FakeMiddlewareContext(), call_next)
+
+    assert load_tokens() == "refreshed-mid-call"
